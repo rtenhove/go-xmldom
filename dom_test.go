@@ -1,6 +1,7 @@
-package xmldom
+package xmldom_test
 
 import (
+	"github.com/rtenhove/go-xmldom"
 	"strings"
 	"testing"
 )
@@ -29,7 +30,7 @@ func TestParseNamespaces(t *testing.T) {
 
 	for _, testCase := range testCases {
 		r := strings.NewReader(testCase.inputXML)
-		doc, err := Parse(r)
+		doc, err := xmldom.Parse(r)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -53,7 +54,7 @@ func TestParseNamespaces(t *testing.T) {
 }
 
 func TestSvgParse(t *testing.T) {
-	root := Must(ParseFile("test.svg")).Root
+	root := xmldom.Must(xmldom.ParseFile("test.svg")).Root
 
 	imagesNodes := root.FindByName("image")
 	if len(imagesNodes) < 4 {
@@ -62,7 +63,7 @@ func TestSvgParse(t *testing.T) {
 }
 
 func TestSvgAttrNamespace(t *testing.T) {
-	root := Must(ParseFile("test.svg")).Root
+	root := xmldom.Must(xmldom.ParseFile("test.svg")).Root
 	uses := root.FindByName("use")
 
 	var contains bool
@@ -82,5 +83,29 @@ func TestSvgAttrNamespace(t *testing.T) {
 				t.Fatalf("Expect use tag to contain xlink:href attribute but got %s", a.Name)
 			}
 		}
+	}
+}
+
+func TestParserDefaultsToTrimmingCharData(t *testing.T) {
+	xml := `<?xml version="1.0" encoding="UTF-8"?>
+<foo> bar </foo>`
+	dp := xmldom.NewDOMParser()
+
+	doc := xmldom.Must(dp.ParseXML(xml))
+
+	if "bar" != doc.Root.Text {
+		t.Fatalf("Expect xml to contain 'bar' but got '%s'", doc.Root.Text)
+	}
+}
+
+func TestParserWithPreserveWhitespaceDoesNotTrimCharData(t *testing.T) {
+	xml := `<?xml version="1.0" encoding="UTF-8"?>
+<foo> bar </foo>`
+	dp := xmldom.NewDOMParser().PreserveWhitespace(true)
+
+	doc := xmldom.Must(dp.ParseXML(xml))
+
+	if " bar " != doc.Root.Text {
+		t.Fatalf("Expect xml to contain ' bar ' but got '%s'", doc.Root.Text)
 	}
 }

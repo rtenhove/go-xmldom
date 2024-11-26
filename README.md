@@ -23,7 +23,8 @@ xml := `<testsuite tests="2" failures="0" time="0.009" name="github.com/subchen/
     <testcase classname="go-xmldom" name="ExampleParse" time="0.005"></testcase>
 </testsuite>`
 
-doc := xmldom.Must(xmldom.ParseXML(xml))
+parser := xmldom.NewDOMParser()
+doc := xmldom.Must(parser.ParseXML(xml))
 root := doc.Root
 
 name := root.GetAttributeValue("name")
