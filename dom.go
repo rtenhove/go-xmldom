@@ -1,4 +1,4 @@
-// XML DOM processing for Golang, supports xpath query
+// Package xmldom provides XML DOM processing, and supports xpath queries
 package xmldom
 
 import (
@@ -21,6 +21,31 @@ const (
 	xsiUrl      = "http://www.w3.org/2001/XMLSchema-instance"
 )
 
+// DOMParser parses XML sources, converting them into a DOM. It is configurable, allowing
+// the user to control some features of the XML parse, such as whitespace preservation in
+// text entities.
+type DOMParser interface {
+	ParseXML(s string) (*Document, error)
+	ParseFile(filename string) (*Document, error)
+	Parse(r io.Reader) (*Document, error)
+	PreserveWhitespace(f bool) DOMParser
+}
+
+type domParserSettings struct {
+	preserveWhitespace bool
+}
+
+func NewDOMParser() DOMParser {
+	return &domParserSettings{}
+}
+
+func (s *domParserSettings) PreserveWhitespace(f bool) DOMParser {
+	s.preserveWhitespace = f
+	return s
+}
+
+// Must parse without error, else panic. Helpful when there is no other path to following
+// if the XML source is invalid.
 func Must(doc *Document, err error) *Document {
 	if err != nil {
 		panic(err)
@@ -28,21 +53,49 @@ func Must(doc *Document, err error) *Document {
 	return doc
 }
 
+// ParseXML text, using default parser settings. For backwards compatibility.
 func ParseXML(s string) (*Document, error) {
 	return Parse(strings.NewReader(s))
 }
 
+// ParseXML text, using the parser settings from the receiver.
+func (s *domParserSettings) ParseXML(text string) (*Document, error) {
+	return s.Parse(strings.NewReader(text))
+}
+
+// ParseFile XML text, using default parser settings. For backwards compatibility.
 func ParseFile(filename string) (*Document, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
 
 	return Parse(file)
 }
 
+// ParseFile XML text, using the parser settings from the receiver.
+func (s *domParserSettings) ParseFile(filename string) (*Document, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
+
+	return s.Parse(file)
+}
+
+// Parse the XML text from the given reader, using default parser settings. For backwards compatibility.
 func Parse(r io.Reader) (*Document, error) {
+	return NewDOMParser().Parse(r)
+}
+
+// Parse the XML text from the given reader, using the parser settings from the receiver.
+func (s *domParserSettings) Parse(r io.Reader) (*Document, error) {
 	p := xml.NewDecoder(r)
 	t, err := p.Token()
 	if err != nil {
@@ -96,7 +149,11 @@ func Parse(r io.Reader) (*Document, error) {
 		case xml.CharData:
 			// text node
 			if e != nil {
-				e.Text = string(bytes.TrimSpace(token))
+				if s.preserveWhitespace {
+					e.Text = string(token)
+				} else {
+					e.Text = string(bytes.TrimSpace(token))
+				}
 			}
 		case xml.ProcInst:
 			doc.ProcInst = stringifyProcInst(&token)
